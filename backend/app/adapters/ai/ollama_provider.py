@@ -180,7 +180,7 @@ class OllamaProvider(BaseAIProvider):
                 earned_points = max(0.0, min(float(earned_points), float(criterion.weight)))
                 normalized_score = (earned_points / float(criterion.weight)) * payload.grade_scale
             if not criterion.is_manual and normalized_score is None:
-                normalized_score = 0.0
+                normalized_score = self._minimum_unscored_value(payload)
             if normalized_score is not None:
                 normalized_score = max(0.0, min(float(normalized_score), float(payload.grade_scale)))
 
@@ -324,6 +324,9 @@ class OllamaProvider(BaseAIProvider):
         text = str(value).strip()
         return text or None
 
+    def _minimum_unscored_value(self, payload: EvaluationInput) -> float:
+        return round(max(float(payload.grade_scale) * 0.01, 0.01), 2)
+
     def _default_feedback(
         self,
         criterion_name: str,
@@ -334,12 +337,12 @@ class OllamaProvider(BaseAIProvider):
     ) -> str:
         if payload.response_language == "ar":
             if missing_item:
-                return f"لم يرجع المزود نتيجة لهذا المعيار ({criterion_name})، لذلك تم إعطاؤه 0 ويحتاج مراجعة."
+                return f"لم يرجع المزود نتيجة لهذا المعيار ({criterion_name})، لذلك تم إعطاؤه علامة منخفضة جداً ويحتاج مراجعة."
             if normalized_score is not None and normalized_score >= payload.grade_scale:
                 return "تم استيفاء المعيار بالكامل ولم يتم الخصم"
             return "لم يرجع المزود شرحاً كافياً لهذا المعيار، لذلك يجب مراجعة سبب الخصم."
         if missing_item:
-            return f"The provider omitted this criterion ({criterion_name}); it was scored as 0 and needs review."
+            return f"The provider omitted this criterion ({criterion_name}); it received a very low fallback score and needs review."
         if normalized_score is not None and normalized_score >= payload.grade_scale:
             return "Criterion fully met, no deductions"
         return "The provider did not return enough feedback for this criterion; the deduction reason needs review."
@@ -420,7 +423,8 @@ Evaluation method:
 - Treat each criterion's teacher_requirement as a checklist. A criterion receives full score only if all explicit required parts are present and correct in the submission.
 - Give proportional partial credit for explicit required parts that are present, even if other parts of the same criterion are missing.
 - Do not use all-or-nothing scoring unless the teacher explicitly says the criterion is binary/pass-fail.
-- Use 0 for a criterion only when the submission has no relevant evidence for that criterion.
+- If one criterion completely fails, deduct only that criterion's weighted contribution and continue scoring the other criteria independently.
+- Do not use 0 for an ordinary criterion unless the teacher explicitly says that a missing item receives 0, or the whole submission is blank/unrelated.
 - Keep partial credit calibrated: vague mentions get low partial credit; high scores require explicit, usable details for most required parts.
 - If an explicit requirement is missing, weak, incorrect, or unsupported, deduct proportionally and explain exactly what was missing.
 - Do not deduct for spelling, writing style, formatting, length, or presentation unless the teacher explicitly required that in the assignment description or criterion.

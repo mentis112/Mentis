@@ -43,7 +43,8 @@ Evaluation method:
 - Award the full criterion score only when all explicit requirements for that criterion are met.
 - Award partial credit for the explicit requirements that are present, even if other parts of the same criterion are missing.
 - Do not use all-or-nothing scoring unless the teacher explicitly says the criterion is binary/pass-fail.
-- Use 0 for a criterion only when the submission has no relevant evidence for that criterion.
+- If one criterion completely fails, deduct only that criterion's weighted contribution and continue scoring the other criteria independently.
+- Do not use 0 for an ordinary criterion unless the teacher explicitly says that a missing item receives 0, or the whole submission is blank/unrelated.
 - Keep partial credit calibrated: vague mentions get low partial credit; high scores require explicit, usable details for most required parts.
 - Deduct only for missing, weak, incorrect, or unsupported requirements from the assignment description or criteria.
 - Do not deduct for spelling, style, formatting, length, or other side issues unless the teacher explicitly included them in the assignment description or criteria.
