@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: project_eval
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d project_eval"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: docker
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: 8000
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/project_eval
+      JWT_SECRET_KEY: docker-dev-jwt-secret-change-before-production
+      JWT_REFRESH_SECRET_KEY: docker-dev-refresh-secret-change-before-production
+      API_KEY_ENCRYPTION_KEY: HD_iz4YYu-GZXD9xw7cN3Z-3oBW38Rtv14jx6-FpnT8=
+      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      STORAGE_ROOT: /app/uploads
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      SEED_DEMO_USER: "true"
+      DEMO_USER_EMAIL: demo@mentis.dev
+      DEMO_USER_USERNAME: Demo Instructor
+      DEMO_USER_PASSWORD: DemoPass123!
+      BATCH_MAX_PARALLEL_EVALUATIONS: 3
+      BATCH_MAX_PARALLEL_EVALUATIONS_GROQ: 1
+      BATCH_RATE_LIMIT_RETRY_ATTEMPTS: 3
+      BATCH_RATE_LIMIT_RETRY_BASE_SECONDS: 2
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads_data:/app/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health').read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      VITE_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres_data:
+  uploads_data:
