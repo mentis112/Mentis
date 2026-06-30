@@ -25,6 +25,7 @@ class EvaluationInput(BaseModel):
     grade_scale: int
     max_tokens_per_request: int | None = None
     response_language: str = "en"
+    enable_auto_score_adjustment: bool = True
 
 
 class LimitRiskEstimate(BaseModel):
@@ -34,10 +35,16 @@ class LimitRiskEstimate(BaseModel):
 
 
 class NormalizedCriterionScore(BaseModel):
+    criterion_id: str | None = None
     criterion_name: str
     earned_points: float | None = None
+    deducted_points: float | None = None
+    reasoning: str | None = None
     ai_score: float | None = None
     feedback: str | None = None
+    requirements_audit: list | None = None
+    improvement_suggestions: str | None = None
+    needs_manual_review: bool = False
 
 
 class NormalizedProviderResult(BaseModel):
@@ -49,6 +56,7 @@ class NormalizedProviderResult(BaseModel):
     model_name: str
     tokens_input: int | None = None
     tokens_output: int | None = None
+    validation_issues: list[str] = Field(default_factory=list)
 
 
 class BaseAIProvider(ABC):
@@ -101,10 +109,16 @@ class BaseAIProvider(ABC):
             summary_feedback=parsed_payload.get("summary_feedback"),
             criterion_scores=[
                 NormalizedCriterionScore(
+                    criterion_id=item.get("criterion_id"),
                     criterion_name=item.get("criterion_name", ""),
                     earned_points=item.get("earned_points", item.get("points")),
+                    deducted_points=item.get("deducted_points"),
+                    reasoning=item.get("reasoning"),
                     ai_score=item.get("ai_score"),
                     feedback=item.get("feedback"),
+                    requirements_audit=item.get("requirements_audit"),
+                    improvement_suggestions=item.get("improvement_suggestions"),
+                    needs_manual_review=bool(item.get("needs_manual_review", False)),
                 )
                 for item in parsed_payload.get("criterion_scores", [])
             ],
@@ -113,6 +127,7 @@ class BaseAIProvider(ABC):
             model_name=model_name,
             tokens_input=tokens_input,
             tokens_output=tokens_output,
+            validation_issues=parsed_payload.get("_validation_issues") or [],
         )
 
     def _extract_provider_error_message(self, response: Response) -> str:

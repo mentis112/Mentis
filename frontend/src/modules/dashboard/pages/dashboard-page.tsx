@@ -49,7 +49,7 @@ export function DashboardPage() {
         />
         <Button onClick={() => navigate("/groups")} className="gap-2">
           <Plus className="h-4 w-4" />
-          {t("groups.newGroup", "إنشاء مجموعة واجبات")}
+          {t("groups.newGroup", "Create assignment group")}
         </Button>
       </div>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -88,14 +88,14 @@ export function DashboardPage() {
                 <FolderKanban className="h-5 w-5" />
               </div>
               <h3 className="text-lg font-semibold">
-                {t("groups.title", "مجموعات الواجبات")}
+                {t("groups.title", "Assignment groups")}
               </h3>
             </div>
             <Link
               to="/groups"
               className="text-sm font-medium text-primary hover:underline"
             >
-              {t("common.viewAll", "عرض الكل")}
+              {t("common.viewAll", "View all")}
             </Link>
           </div>
 
@@ -108,7 +108,7 @@ export function DashboardPage() {
               {groups.slice(0, 6).map((group) => {
                 const date = group.created_at
                   ? new Date(group.created_at).toLocaleDateString(
-                      t("common.locale", "ar-SA"),
+                      t("common.locale", "en-US"),
                     )
                   : "";
 
@@ -128,14 +128,14 @@ export function DashboardPage() {
                             className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 border-0"
                           >
                             <CheckCircle2 className="mr-1 h-3 w-3 rtl:ml-1 rtl:mr-0" />
-                            {t("groups.ready", "جاهز")}
+                            {t("groups.ready", "Ready")}
                           </Badge>
                         ) : (
                           <Badge
                             className="bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 border-0"
                           >
                             <AlertCircle className="mr-1 h-3 w-3 rtl:ml-1 rtl:mr-0" />
-                            {t("groups.notReady", "غير جاهز")}
+                            {t("groups.notReady", "Not ready")}
                           </Badge>
                         )}
                       </div>
@@ -159,7 +159,7 @@ export function DashboardPage() {
                         <Target className="h-3.5 w-3.5" />
                         <span>
                           {group.criteria?.length ?? 0}{" "}
-                          {t("groups.criteria", "معايير")}
+                          {t("groups.criteria", "criteria")}
                         </span>
                       </div>
                     </div>
@@ -172,10 +172,10 @@ export function DashboardPage() {
               icon={
                 <FolderKanban size={40} className="text-muted-foreground/50" />
               }
-              title={t("groups.emptyTitle", "لا توجد مجموعات")}
+              title={t("groups.emptyTitle", "No groups yet")}
               description={t(
                 "groups.emptyDescription",
-                "قم بإنشاء مجموعة واجبات لبدء تقييم أعمال الطلاب.",
+                "Create an assignment group to start evaluating student work.",
               )}
               action={
                 <Button
@@ -183,7 +183,7 @@ export function DashboardPage() {
                   className="mt-4 gap-2"
                 >
                   <Plus className="h-4 w-4" />
-                  {t("groups.newGroup", "إنشاء مجموعة واجبات")}
+                  {t("groups.newGroup", "Create assignment group")}
                 </Button>
               }
             />

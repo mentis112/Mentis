@@ -1,5 +1,6 @@
 ﻿import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -10,9 +11,10 @@ import { Card } from "@/components/shared/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Input } from "@/components/shared/input";
 import { PaginationControls } from "@/components/shared/pagination-controls";
-import { Select } from "@/components/shared/select";
+import { cn } from "@/lib/cn";
 import { fetchEvaluationDetail, fetchAllEvaluations } from "@/services/evaluations";
 import { fetchGroups } from "@/services/groups";
+import type { AssignmentGroup } from "@/types/api";
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -67,6 +69,142 @@ function EvaluationInlineDetails({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function GroupFilterDropdown({
+  groups,
+  value,
+  isLoading,
+  onChange,
+}: {
+  groups: AssignmentGroup[];
+  value: string;
+  isLoading: boolean;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selectedGroup = groups.find((group) => group.id === value);
+  const selectedLabel = selectedGroup?.name ?? t("evaluations.allGroups");
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const handleSelect = (nextValue: string) => {
+    onChange(nextValue);
+    setIsOpen(false);
+  };
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        className={cn(
+          "flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-border/75 bg-card/70 px-3 text-sm font-bold outline-none transition duration-200 hover:border-foreground/25 focus:border-primary focus:bg-card focus:ring-4 focus:ring-primary/10",
+          isOpen && "border-primary bg-card ring-4 ring-primary/10",
+        )}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <ChevronDown size={16} className={cn("shrink-0 transition", isOpen && "rotate-180")} />
+        <span className="min-w-0 flex-1 truncate text-start">
+          {isLoading ? t("common.loading") : selectedLabel}
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div
+          role="listbox"
+          className="absolute inset-x-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-xl border border-border/75 bg-card/95 p-1.5 shadow-lift backdrop-blur-xl"
+        >
+          <button
+            type="button"
+            role="option"
+            aria-selected={value === "all"}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-start transition hover:bg-muted/75",
+              value === "all" && "bg-primary/10 text-primary",
+            )}
+            onClick={() => handleSelect("all")}
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+              {value === "all" ? <Check size={16} /> : null}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-bold">{t("evaluations.allGroups")}</span>
+          </button>
+
+          {groups.map((group) => {
+            const isSelected = value === group.id;
+            const criteriaCount = group.criteria?.length ?? 0;
+
+            return (
+              <button
+                key={group.id}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                className={cn(
+                  "flex w-full items-start gap-3 rounded-lg px-3 py-3 text-start transition hover:bg-muted/75",
+                  isSelected && "bg-primary/10 text-primary",
+                )}
+                onClick={() => handleSelect(group.id)}
+              >
+                <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center">
+                  {isSelected ? <Check size={16} /> : null}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold">{group.name}</span>
+                  <span className="mt-1 flex flex-wrap gap-1.5 text-xs text-foreground/60">
+                    <span className="rounded-full bg-muted/80 px-2 py-0.5">
+                      {`${t("groups.gradeScale")}: ${group.grade_scale}`}
+                    </span>
+                    <span className="rounded-full bg-muted/80 px-2 py-0.5">
+                      {`${t("groups.criteriaCount")}: ${criteriaCount}`}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5",
+                        group.ready_for_evaluation
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-muted/80 text-foreground/60",
+                      )}
+                    >
+                      {group.ready_for_evaluation ? t("state.completed") : t("state.pending")}
+                    </span>
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -140,14 +278,12 @@ export function AllEvaluationsPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">{t("submissions.group")}</label>
-            <Select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
-              <option value="all">{t("evaluations.allGroups")}</option>
-              {groupsQuery.data?.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </Select>
+            <GroupFilterDropdown
+              groups={groupsQuery.data ?? []}
+              value={groupFilter}
+              isLoading={groupsQuery.isPending}
+              onChange={setGroupFilter}
+            />
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Eye, Pencil, Plus, Trash2, X } from "lucide-react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -49,6 +49,7 @@ const schema = z
     name: z.string().min(2),
     description: z.string().optional(),
     grade_scale: z.coerce.number().min(1),
+    enable_auto_score_adjustment: z.boolean().default(true),
     is_active: z.boolean().default(true),
     criteria: z.array(criterionDraftSchema).default([]),
   })
@@ -104,6 +105,7 @@ const toFormValues = (group: AssignmentGroup): FormValues => ({
   name: group.name,
   description: group.description ?? "",
   grade_scale: group.grade_scale,
+  enable_auto_score_adjustment: group.enable_auto_score_adjustment,
   is_active: group.is_active,
   criteria:
     group.criteria?.length
@@ -123,6 +125,7 @@ const blankFormValues = (): FormValues => ({
   name: "",
   description: "",
   grade_scale: 100,
+  enable_auto_score_adjustment: true,
   is_active: true,
   criteria: [blankCriterion()],
 });
@@ -138,6 +141,8 @@ export function GroupsPage() {
   const [pendingEditValues, setPendingEditValues] = useState<FormValues | null>(null);
   const [groupPendingDelete, setGroupPendingDelete] = useState<AssignmentGroup | null>(null);
   const [showWeightError, setShowWeightError] = useState(false);
+  const [groupsListHeight, setGroupsListHeight] = useState<number | null>(null);
+  const formCardRef = useRef<HTMLDivElement | null>(null);
 
   const groupsQuery = useQuery({
     queryKey: ["groups"],
@@ -190,6 +195,32 @@ export function GroupsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupsQuery.data, location.pathname, location.state, navigate]);
 
+  useEffect(() => {
+    const element = formCardRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateGroupsListHeight = () => {
+      setGroupsListHeight(Math.ceil(element.getBoundingClientRect().height));
+    };
+
+    updateGroupsListHeight();
+    window.addEventListener("resize", updateGroupsListHeight);
+
+    if (typeof ResizeObserver === "undefined") {
+      return () => window.removeEventListener("resize", updateGroupsListHeight);
+    }
+
+    const resizeObserver = new ResizeObserver(updateGroupsListHeight);
+    resizeObserver.observe(element);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateGroupsListHeight);
+    };
+  }, []);
+
   const resetToCreateMode = () => {
     setEditingGroup(null);
     setPendingEditValues(null);
@@ -224,6 +255,7 @@ export function GroupsPage() {
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
         grade_scale: Number(values.grade_scale),
+        enable_auto_score_adjustment: values.enable_auto_score_adjustment,
         is_active: values.is_active,
       });
       const criteria = values.criteria.filter(hasCriterionContent);
@@ -277,6 +309,7 @@ export function GroupsPage() {
         name: values.name.trim(),
         description: values.description?.trim() || null,
         grade_scale: Number(values.grade_scale),
+        enable_auto_score_adjustment: values.enable_auto_score_adjustment,
         is_active: values.is_active,
       });
 
@@ -393,10 +426,15 @@ export function GroupsPage() {
     );
   };
 
+  const groupsListStyle = groupsListHeight
+    ? ({ "--groups-list-height": `${groupsListHeight}px` } as CSSProperties)
+    : undefined;
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("groups.title")} subtitle={t("groups.subtitle")} />
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <div ref={formCardRef} className="xl:sticky xl:top-28">
         <Card className="p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -439,6 +477,19 @@ export function GroupsPage() {
               <label className="text-sm font-medium">{t("groups.gradeScale")}</label>
               <Input {...form.register("grade_scale")} type="number" onWheel={(e) => e.currentTarget.blur()} />
             </div>
+            <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/40 p-3 text-sm">
+              <input
+                {...form.register("enable_auto_score_adjustment")}
+                type="checkbox"
+                className="mt-1 size-4"
+              />
+              <span>
+                <span className="block font-medium">{t("groups.autoScoreAdjustment")}</span>
+                <span className="mt-1 block text-xs leading-6 text-foreground/60">
+                  {t("groups.autoScoreAdjustmentHint")}
+                </span>
+              </span>
+            </label>
             <div className="space-y-4 rounded-2xl border border-border/70 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -560,28 +611,57 @@ export function GroupsPage() {
             </Button>
           </form>
         </Card>
+        </div>
 
-        <div className="space-y-4">
+        <div
+          className="space-y-4 xl:max-h-[var(--groups-list-height)] xl:overflow-y-auto xl:pe-2"
+          style={groupsListStyle}
+        >
           {paginatedGroups.length ? (
             paginatedGroups.map((group) => (
               <Card key={group.id} className={editingGroup?.id === group.id ? "border-primary/50 p-5" : "p-5"}>
                 <div className="flex flex-col gap-4">
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold">{group.name}</h3>
-                    <p className="text-sm leading-7 text-foreground/70">{group.description}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="min-w-0 text-lg font-semibold leading-7">{group.name}</h3>
+                    <Badge
+                      className={
+                        group.ready_for_evaluation
+                          ? "shrink-0 bg-emerald-100 text-emerald-700"
+                          : "shrink-0"
+                      }
+                    >
+                      {group.ready_for_evaluation ? t("state.completed") : t("state.pending")}
+                    </Badge>
                   </div>
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+                  {group.description ? (
+                    <p
+                      dir="auto"
+                      className="line-clamp-2 text-start text-sm leading-7 text-foreground/70"
+                    >
+                      {group.description}
+                    </p>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="whitespace-nowrap">{`${t("groups.gradeScale")}: ${group.grade_scale}`}</Badge>
+                    <Badge className="whitespace-nowrap">{`${t("groups.criteriaCount")}: ${group.criteria?.length ?? 0}`}</Badge>
+                    <Badge className="whitespace-nowrap">{`${t("groups.weights")}: ${group.weights_total ?? 0}`}</Badge>
+                    <Badge className="whitespace-nowrap">
+                      {group.enable_auto_score_adjustment
+                        ? t("groups.autoScoreAdjustmentOn")
+                        : t("groups.autoScoreAdjustmentOff")}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap gap-2">
-                      <Badge>{`${t("groups.gradeScale")}: ${group.grade_scale}`}</Badge>
-                      <Badge>{`${t("groups.criteriaCount")}: ${group.criteria?.length ?? 0}`}</Badge>
-                      <Badge>{`${t("groups.weights")}: ${group.weights_total ?? 0}`}</Badge>
-                      <Badge
-                        className={group.ready_for_evaluation ? "bg-emerald-100 text-emerald-700" : ""}
-                      >
-                        {group.ready_for_evaluation ? t("state.completed") : t("state.pending")}
-                      </Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-2 lg:shrink-0">
+                      <Link to={`/groups/${group.id}`}>
+                        <Button variant="secondary" className="min-w-28 whitespace-nowrap">
+                          <Eye size={16} />
+                          {t("groups.details")}
+                        </Button>
+                      </Link>
                       <Button
                         variant="secondary"
                         type="button"
@@ -591,23 +671,19 @@ export function GroupsPage() {
                         <Pencil size={16} />
                         {t("groups.edit")}
                       </Button>
-                      <Link to={`/groups/${group.id}`}>
-                        <Button variant="secondary" className="min-w-28 whitespace-nowrap">
-                          {t("groups.details")}
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="danger"
-                        type="button"
-                        className="min-w-28 whitespace-nowrap"
-                        onClick={() => setGroupPendingDelete(group)}
-                        disabled={deleteMutation.isPending && deleteMutation.variables === group.id}
-                      >
-                        {deleteMutation.isPending && deleteMutation.variables === group.id
-                          ? t("common.loading")
-                          : t("groups.delete")}
-                      </Button>
                     </div>
+                    <Button
+                      variant="danger"
+                      type="button"
+                      className="min-w-28 whitespace-nowrap"
+                      onClick={() => setGroupPendingDelete(group)}
+                      disabled={deleteMutation.isPending && deleteMutation.variables === group.id}
+                    >
+                      <Trash2 size={16} />
+                      {deleteMutation.isPending && deleteMutation.variables === group.id
+                        ? t("common.loading")
+                        : t("groups.delete")}
+                    </Button>
                   </div>
                 </div>
               </Card>

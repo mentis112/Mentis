@@ -11,6 +11,7 @@ class AssignmentGroup(UUIDMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     grade_scale: Mapped[int] = mapped_column(Integer, nullable=False)
+    enable_auto_score_adjustment: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     instructor = relationship("Instructor", back_populates="assignment_groups")

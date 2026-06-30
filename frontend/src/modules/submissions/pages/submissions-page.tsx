@@ -4,7 +4,6 @@ import { Trash2, UploadCloud } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/shared/badge";
@@ -1054,10 +1053,34 @@ export function SubmissionPage() {
         });
         return baseRow;
       });
-      const worksheet = XLSX.utils.json_to_sheet(exportRows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Submissions");
-      XLSX.writeFile(workbook, "submissions-report.xlsx");
+      const { default: ExcelJS } = await import("exceljs");
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Submissions");
+      const headers = Array.from(
+        exportRows.reduce((keys, row) => {
+          Object.keys(row).forEach((key) => keys.add(key));
+          return keys;
+        }, new Set<string>()),
+      );
+      worksheet.columns = headers.map((header) => ({
+        header,
+        key: header,
+        width: Math.max(14, Math.min(40, header.length + 4)),
+      }));
+      worksheet.addRows(exportRows);
+      worksheet.getRow(1).font = { bold: true };
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "submissions-report.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
     } catch (error) {
       toast.error(getUserFacingErrorMessage(error));
     }
@@ -1135,10 +1158,10 @@ export function SubmissionPage() {
                   <UploadCloud className="h-6 w-6 text-primary" />
                 </div>
                 <p className="mb-1 font-medium">
-                  {t("submissions.dragAndDrop", "اسحب وأفلت الملفات هنا")}
+                  {t("submissions.dragAndDrop", "Drag and drop files here")}
                 </p>
                 <p className="text-sm text-foreground/60">
-                  {t("submissions.browseFiles", "أو انقر لتصفح ملفاتك")}
+                  {t("submissions.browseFiles", "or click to browse your files")}
                 </p>
               </div>
             </div>
@@ -1533,7 +1556,7 @@ export function SubmissionPage() {
                     <Button
                       variant="ghost"
                       type="button"
-                      className="absolute left-3 top-3 h-8 w-8 px-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      className="absolute end-3 top-3 h-8 w-8 px-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => setSubmissionPendingDelete(submission)}
                       disabled={
                         !canDeleteSubmission(submission) ||
@@ -1546,7 +1569,7 @@ export function SubmissionPage() {
                       <Trash2 size={15} />
                     </Button>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0 space-y-2">
+                      <div className="min-w-0 space-y-2 pe-10">
                         <p className="break-words font-semibold sm:max-w-[390px]">
                           {submission.original_filename}
                         </p>
@@ -1766,7 +1789,7 @@ export function SubmissionPage() {
                                   variant="secondary"
                                   className="h-8 px-3 text-xs whitespace-nowrap shadow-sm hover:shadow-md"
                                 >
-                                  {t("submissions.manualAdjust", "تعديل يدوي")}
+                                  {t("submissions.manualAdjust", "Manual adjust")}
                                 </Button>
                               </Link>
                             ) : (

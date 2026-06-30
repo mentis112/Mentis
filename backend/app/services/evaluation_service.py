@@ -86,6 +86,7 @@ class EvaluationService:
                 grade_scale=group.grade_scale,
                 max_tokens_per_request=provider_config.max_tokens_per_request,
                 response_language=response_language,
+                enable_auto_score_adjustment=group.enable_auto_score_adjustment,
             ),
             estimated_tokens,
         )
@@ -118,6 +119,7 @@ class EvaluationService:
             grade_scale=group.grade_scale,
             max_tokens_per_request=provider_config.max_tokens_per_request,
             response_language=response_language,
+            enable_auto_score_adjustment=group.enable_auto_score_adjustment,
         )
 
         submission.status = SubmissionStatus.PROCESSING
@@ -127,33 +129,38 @@ class EvaluationService:
         try:
             normalized = await adapter.evaluate_submission(evaluation_input)
             criteria_by_order = list(group.criteria)
-            normalized_by_name = {}
+            use_prompt_ids = all(item.criterion_id for item in normalized.criterion_scores)
+            normalized_by_key = {}
             for item in normalized.criterion_scores:
-                key = item.criterion_name.strip().casefold()
+                key = item.criterion_id.strip() if item.criterion_id else item.criterion_name.strip().casefold()
                 if not key:
-                    raise ValidationError("Provider response included a criterion score without a criterion_name")
-                if key in normalized_by_name:
+                    raise ValidationError(
+                        "Provider response included a criterion score without a criterion_id or criterion_name"
+                    )
+                if key in normalized_by_key:
                     raise ValidationError(
                         f"Provider response included duplicate criterion score: {item.criterion_name}"
                     )
-                normalized_by_name[key] = item
-            expected_criterion_names = {
-                criterion.name.strip().casefold() for criterion in criteria_by_order
-            }
-            extra_criteria = [
-                item.criterion_name
-                for item in normalized.criterion_scores
-                if item.criterion_name.strip().casefold() not in expected_criterion_names
-            ]
+                normalized_by_key[key] = item
+            expected_keys = (
+                {f"cr_{index + 1:02d}" for index, _ in enumerate(criteria_by_order)}
+                if use_prompt_ids
+                else {criterion.name.strip().casefold() for criterion in criteria_by_order}
+            )
+            extra_criteria = []
+            for item in normalized.criterion_scores:
+                key = item.criterion_id.strip() if use_prompt_ids and item.criterion_id else item.criterion_name.strip().casefold()
+                if key not in expected_keys:
+                    extra_criteria.append(item.criterion_id or item.criterion_name)
             if extra_criteria:
                 raise ValidationError(
                     "Provider response included unrecognized criteria: " + ", ".join(extra_criteria)
                 )
-            missing_criteria = [
-                criterion.name
-                for criterion in criteria_by_order
-                if criterion.name.strip().casefold() not in normalized_by_name
-            ]
+            missing_criteria = []
+            for index, criterion in enumerate(criteria_by_order):
+                key = f"cr_{index + 1:02d}" if use_prompt_ids else criterion.name.strip().casefold()
+                if key not in normalized_by_key:
+                    missing_criteria.append(criterion.name)
             if missing_criteria:
                 raise ValidationError(
                     "Provider response omitted criteria: " + ", ".join(missing_criteria)
@@ -177,8 +184,9 @@ class EvaluationService:
             )
 
             created_scores: list[CriterionScore] = []
-            for criterion in criteria_by_order:
-                item = normalized_by_name.get(criterion.name.strip().casefold())
+            for index, criterion in enumerate(criteria_by_order):
+                key = f"cr_{index + 1:02d}" if use_prompt_ids else criterion.name.strip().casefold()
+                item = normalized_by_key.get(key)
                 ai_score = self._normalize_provider_score(
                     score=item.ai_score,
                     earned_points=item.earned_points,

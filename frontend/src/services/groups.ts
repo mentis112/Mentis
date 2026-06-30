@@ -13,6 +13,7 @@ export function createGroup(payload: {
   name: string;
   description?: string;
   grade_scale: number;
+  enable_auto_score_adjustment: boolean;
   is_active: boolean;
 }) {
   return apiRequest<AssignmentGroup>("/groups", {
@@ -27,6 +28,7 @@ export function updateGroup(
     name: string;
     description?: string | null;
     grade_scale: number;
+    enable_auto_score_adjustment: boolean;
     is_active: boolean;
   }>,
 ) {

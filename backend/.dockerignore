@@ -12,3 +12,6 @@ __pycache__/
 .mypy_cache/
 *.log
 uploads/
+.DS_Store
+__MACOSX/
+app/adapters/ai/openrouter_provider.py

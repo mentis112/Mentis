@@ -16,10 +16,13 @@ from app.models.enums import ProviderName
 from app.utils.evaluation_response_audit import (
     append_audit_to_feedback,
     append_cap_note,
+    align_score_with_fully_met_audit,
     audit_consistency_errors,
     cap_score_by_audit_consistency,
     cap_score_by_explicit_evidence,
     normalize_requirements_audit,
+    should_apply_explicit_evidence_cap,
+    soften_generic_partial_audit_items,
 )
 from app.utils.prompt_policy import build_grading_rules
 
@@ -200,29 +203,50 @@ class OllamaProvider(BaseAIProvider):
                 or item.get("audit")
                 or item.get("checklist")
             )
-            normalized_score, audit_cap_note = cap_score_by_audit_consistency(
-                criterion_name=criterion.name,
-                audit_items=audit_items,
-                normalized_score=normalized_score,
-                grade_scale=float(payload.grade_scale),
-                is_manual=criterion.is_manual,
-                response_language=payload.response_language,
-            )
-            consistency_errors = audit_consistency_errors(
-                criterion_name=criterion.name,
-                audit_items=audit_items,
-                normalized_score=normalized_score,
-                grade_scale=float(payload.grade_scale),
-                is_manual=criterion.is_manual,
-            )
-            if consistency_errors:
-                raise ValidationError("; ".join(consistency_errors))
+            audit_items = soften_generic_partial_audit_items(audit_items)
+            audit_cap_note = None
+            if payload.enable_auto_score_adjustment:
+                normalized_score, audit_cap_note = cap_score_by_audit_consistency(
+                    criterion_name=criterion.name,
+                    audit_items=audit_items,
+                    normalized_score=normalized_score,
+                    grade_scale=float(payload.grade_scale),
+                    is_manual=criterion.is_manual,
+                    response_language=payload.response_language,
+                )
+                consistency_errors = audit_consistency_errors(
+                    criterion_name=criterion.name,
+                    audit_items=audit_items,
+                    normalized_score=normalized_score,
+                    grade_scale=float(payload.grade_scale),
+                    is_manual=criterion.is_manual,
+                )
+                if consistency_errors:
+                    raise ValidationError("; ".join(consistency_errors))
+                normalized_score, fully_met_adjusted = align_score_with_fully_met_audit(
+                    audit_items=audit_items,
+                    normalized_score=normalized_score,
+                    grade_scale=float(payload.grade_scale),
+                    is_manual=criterion.is_manual,
+                )
+            else:
+                fully_met_adjusted = False
 
-            feedback = self._coerce_feedback(item.get("feedback")) or self._default_feedback(
-                criterion.name,
-                payload=payload,
-                missing_item=False,
-                normalized_score=normalized_score,
+            feedback = (
+                self._default_feedback(
+                    criterion.name,
+                    payload=payload,
+                    missing_item=False,
+                    normalized_score=normalized_score,
+                )
+                if fully_met_adjusted
+                else self._coerce_feedback(item.get("feedback"))
+                or self._default_feedback(
+                    criterion.name,
+                    payload=payload,
+                    missing_item=False,
+                    normalized_score=normalized_score,
+                )
             )
             feedback = append_audit_to_feedback(
                 feedback,
@@ -230,14 +254,15 @@ class OllamaProvider(BaseAIProvider):
                 response_language=payload.response_language,
             )
             feedback = append_cap_note(feedback, audit_cap_note)
-            normalized_score, cap_note = cap_score_by_explicit_evidence(
-                criterion_description=criterion.description,
-                submission_text=payload.submission_text,
-                normalized_score=normalized_score,
-                grade_scale=float(payload.grade_scale),
-                response_language=payload.response_language,
-            )
-            feedback = append_cap_note(feedback, cap_note)
+            if payload.enable_auto_score_adjustment and should_apply_explicit_evidence_cap(audit_items):
+                normalized_score, cap_note = cap_score_by_explicit_evidence(
+                    criterion_description=criterion.description,
+                    submission_text=payload.submission_text,
+                    normalized_score=normalized_score,
+                    grade_scale=float(payload.grade_scale),
+                    response_language=payload.response_language,
+                )
+                feedback = append_cap_note(feedback, cap_note)
             if normalized_score is not None and criterion.weight > 0:
                 earned_points = (normalized_score / float(payload.grade_scale)) * float(criterion.weight)
 
@@ -502,6 +527,11 @@ Evaluation method:
 - Read the teacher assignment description, then evaluate EVERY criterion below.
 - Treat each criterion's teacher_requirement as a checklist. A criterion receives full score only if all explicit required parts are present and correct in the submission.
 - Break each criterion into atomic required items before scoring. Named items, counts, coverage categories, rules, and phrases after "including", "covering", or "with" must be checked separately.
+- If teacher_requirement contains explicit deduction rules or numeric penalties such as "-5", "-10", "deduct 5", or "subtract 5", start from max_points and subtract only the listed penalties that clearly apply.
+- Do not make the score lower than the teacher's explicit deduction schedule justifies. Extra suggestions for improvement are feedback only, not additional deductions.
+- Do not deduct points for feedback such as "the answer is organized and clear, but it could be improved" unless you identify a concrete missing, weak, incorrect, or unsupported requirement from the teacher_requirement.
+- If every requirements_audit item for a criterion is "met", earned_points must equal max_points and deducted_points must be 0.
+- If earned_points is less than max_points, at least one requirements_audit item must be "partial" or "missing"; otherwise the score and feedback are inconsistent.
 - Use only positive evidence from the submission. A heading, section title, criterion name, or generic sentence is not enough.
 - If the submission explicitly says something is missing, not provided, not explained, or will be done later, treat that as evidence of absence.
 - Give proportional partial credit for explicit required parts that are present, even if other parts of the same criterion are missing.

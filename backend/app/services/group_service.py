@@ -37,6 +37,7 @@ class GroupService:
             name=payload.name.strip(),
             description=payload.description,
             grade_scale=payload.grade_scale,
+            enable_auto_score_adjustment=payload.enable_auto_score_adjustment,
             is_active=payload.is_active,
         )
         await self.repository.create(group)

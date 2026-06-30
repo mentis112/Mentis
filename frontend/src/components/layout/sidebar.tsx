@@ -10,16 +10,16 @@ export function Sidebar() {
 
   return (
     <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-e border-border/65 bg-card/80 px-4 py-5 shadow-panel backdrop-blur-xl lg:flex lg:flex-col">
-      <div className="mb-7 rounded-2xl border border-border/65 bg-muted/45 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-white shadow-glow dark:text-slate-950">
-            <BrainCircuit size={24} />
+      <div className="mb-7 rounded-2xl border border-border/65 bg-muted/45 p-5">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-glow dark:text-slate-950">
+            <BrainCircuit size={28} strokeWidth={2.4} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-bold uppercase text-foreground/45">
               Mentis
             </p>
-            <h1 className="mt-1 text-base font-extrabold leading-6">
+            <h1 className="mt-1 max-w-[10rem] text-sm font-extrabold leading-5">
               {t("app.name")}
             </h1>
           </div>

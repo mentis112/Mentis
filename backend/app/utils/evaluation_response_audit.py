@@ -54,6 +54,60 @@ _ABSENCE_PATTERNS = (
     " لا يحتوي ",
 )
 
+_GENERIC_IMPROVEMENT_PATTERNS = (
+    "can be improved",
+    "could be improved",
+    "could improve",
+    "needs improvement",
+    "more detail",
+    "more details",
+    "more detailed",
+    "more clarity",
+    "clearer",
+    "better organized",
+    "\u064a\u0645\u0643\u0646 \u062a\u062d\u0633\u064a\u0646",
+    "\u0642\u0627\u0628\u0644 \u0644\u0644\u062a\u062d\u0633\u064a\u0646",
+    "\u0645\u0632\u064a\u062f \u0645\u0646 \u0627\u0644\u062a\u0641\u0627\u0635\u064a\u0644",
+    "\u0645\u0632\u064a\u062f\u0627\u064b \u0645\u0646 \u0627\u0644\u062a\u0641\u0627\u0635\u064a\u0644",
+    "\u0623\u0643\u062b\u0631 \u062a\u0641\u0635\u064a\u0644",
+    "\u0623\u0643\u062b\u0631 \u0648\u0636\u0648\u062d",
+    "\u0628\u0634\u0643\u0644 \u0623\u0648\u0636\u062d",
+)
+
+_AUDIT_STATUS_COVERAGE_WEIGHTS = {
+    "met": 1.0,
+    "partial": 0.6,
+    "missing": 0.2,
+    "unknown": 0.2,
+}
+
+_CONCRETE_DEFICIENCY_PATTERNS = (
+    "missing",
+    "absent",
+    "not provided",
+    "not included",
+    "not answered",
+    "incorrect",
+    "wrong",
+    "unsupported",
+    "incomplete",
+    "no evidence",
+    "lacks",
+    "does not",
+    "did not",
+    "\u0646\u0627\u0642\u0635",
+    "\u063a\u0627\u0626\u0628",
+    "\u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f",
+    "\u0644\u0627 \u064a\u0648\u062c\u062f",
+    "\u0644\u0645 \u064a\u062a\u0645",
+    "\u0644\u0645 \u064a\u0630\u0643\u0631",
+    "\u0644\u0645 \u064a\u062c\u0628",
+    "\u063a\u064a\u0631 \u0635\u062d\u064a\u062d",
+    "\u062e\u0627\u0637\u0626",
+    "\u063a\u064a\u0631 \u0645\u062f\u0639\u0648\u0645",
+    "\u063a\u064a\u0631 \u0645\u0643\u062a\u0645\u0644",
+)
+
 
 def normalize_requirements_audit(value: Any) -> list[RequirementAuditItem]:
     if not isinstance(value, list):
@@ -94,6 +148,227 @@ def normalize_requirements_audit(value: Any) -> list[RequirementAuditItem]:
     return audit_items
 
 
+def remove_generic_improvement_language(feedback: str) -> tuple[str, list[str]]:
+    if not feedback.strip():
+        return "", []
+
+    kept_parts: list[str] = []
+    removed_parts: list[str] = []
+    for part in re.split(r"(?<=[.!?؟])\s+|\n+", feedback.strip()):
+        cleaned_part = part.strip()
+        if not cleaned_part:
+            continue
+
+        split_part = re.split(
+            r"\s*(?:,|،)?\s*(?:but|however|لكن|ولكن)\s+",
+            cleaned_part,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )
+        if len(split_part) == 2 and _is_generic_improvement_only(split_part[1]):
+            prefix = split_part[0].strip()
+            if prefix:
+                kept_parts.append(prefix)
+            removed_parts.append(split_part[1].strip())
+            continue
+
+        if _is_generic_improvement_only(cleaned_part):
+            removed_parts.append(cleaned_part)
+            continue
+
+        kept_parts.append(cleaned_part)
+
+    cleaned_feedback = " ".join(kept_parts).strip()
+    return cleaned_feedback, removed_parts
+
+
+def validate_and_correct_criterion_score(
+    *,
+    criterion_id: str,
+    criterion_name: str,
+    max_points: float,
+    earned_points: float | None,
+    feedback: str,
+    audit_items: list[RequirementAuditItem],
+    criterion_description: str | None,
+) -> tuple[float | None, str, list[RequirementAuditItem], bool, list[str]]:
+    issues: list[str] = []
+    needs_manual_review = False
+
+    if earned_points is None:
+        return earned_points, feedback, audit_items, needs_manual_review, issues
+
+    max_points = max(0.0, float(max_points))
+
+    original_points = float(earned_points)
+    earned_points = max(0.0, min(float(earned_points), max_points))
+    if earned_points != original_points:
+        issues.append(
+            f"{criterion_id}: capped earned_points from {_format_points(original_points)} "
+            f"to {_format_points(earned_points)}"
+        )
+
+    earned_points, feedback = _apply_rule_a_full_marks(
+        criterion_id=criterion_id,
+        max_points=max_points,
+        earned_points=earned_points,
+        feedback=feedback,
+        audit_items=audit_items,
+        issues=issues,
+    )
+
+    softened_items: list[RequirementAuditItem] = []
+    criterion_text = " ".join(
+        part for part in (criterion_name, criterion_description or "") if part
+    )
+    for item in audit_items:
+        if _is_softenable_generic_partial(item, criterion_text):
+            issues.append(
+                f"{criterion_id}: softened generic partial audit item to met: {item.requirement}"
+            )
+            softened_items.append(
+                RequirementAuditItem(
+                    requirement=item.requirement,
+                    status="met",
+                    evidence=item.evidence,
+                    missing_or_weak_reason="",
+                )
+            )
+        else:
+            softened_items.append(item)
+    audit_items = softened_items
+
+    earned_points, feedback = _apply_rule_a_full_marks(
+        criterion_id=criterion_id,
+        max_points=max_points,
+        earned_points=earned_points,
+        feedback=feedback,
+        audit_items=audit_items,
+        issues=issues,
+    )
+
+    earned_points, feedback = _cap_points_by_audit_coverage(
+        criterion_id=criterion_id,
+        max_points=max_points,
+        earned_points=earned_points,
+        feedback=feedback,
+        audit_items=audit_items,
+        issues=issues,
+    )
+
+    # Only forgive an unsupported deduction when the provider gave no checklist at all.
+    # If any partial/missing audit item still remains after normalization, keep the
+    # non-full score instead of silently restoring full marks.
+    if (
+        0 < earned_points < max_points
+        and not audit_items
+        and not _has_specific_unmet_audit_item(audit_items, criterion_text)
+        and not _contains_concrete_deficiency_text(feedback)
+    ):
+        issues.append(
+            f"{criterion_id}: raised earned_points from {_format_points(earned_points)} "
+            "to full marks because the deduction had no specific unmet requirement"
+        )
+        earned_points = max_points
+        feedback = _append_auto_correction(
+            feedback,
+            "[Auto-corrected: no specific unmet requirement supported the deduction.]",
+        )
+
+    if not audit_items and 0 < earned_points < max_points:
+        needs_manual_review = True
+        issues.append(f"{criterion_id}: marked needs_manual_review because audit is empty")
+
+    return earned_points, feedback, audit_items, needs_manual_review, issues
+
+
+def _apply_rule_a_full_marks(
+    *,
+    criterion_id: str,
+    max_points: float,
+    earned_points: float,
+    feedback: str,
+    audit_items: list[RequirementAuditItem],
+    issues: list[str],
+) -> tuple[float, str]:
+    all_items_met_with_evidence = audit_items and all(
+        item.status == "met"
+        and item.evidence.strip()
+        and not _contains_absence_language(item.evidence)
+        for item in audit_items
+    )
+    if all_items_met_with_evidence and earned_points < max_points:
+        issues.append(
+            f"{criterion_id}: raised earned_points from {_format_points(earned_points)} "
+            f"to {_format_points(max_points)} because all audit items are met"
+        )
+        earned_points = max_points
+        feedback = _append_auto_correction(
+            feedback,
+            "[Auto-corrected: all requirements met \u2192 full marks.]",
+        )
+    return earned_points, feedback
+
+
+def _cap_points_by_audit_coverage(
+    *,
+    criterion_id: str,
+    max_points: float,
+    earned_points: float,
+    feedback: str,
+    audit_items: list[RequirementAuditItem],
+    issues: list[str],
+) -> tuple[float, str]:
+    if not audit_items:
+        return earned_points, feedback
+
+    has_unmet_items = any(item.status in {"partial", "missing", "unknown"} for item in audit_items)
+    if not has_unmet_items:
+        return earned_points, feedback
+
+    weighted_coverage = sum(
+        _AUDIT_STATUS_COVERAGE_WEIGHTS.get(item.status, 0.2) for item in audit_items
+    )
+    coverage_ratio = max(0.0, min(weighted_coverage / len(audit_items), 1.0))
+    capped_points = round(max_points * coverage_ratio, 2)
+    if capped_points >= earned_points:
+        return earned_points, feedback
+
+    issues.append(
+        f"{criterion_id}: reduced earned_points from {_format_points(earned_points)} "
+        f"to {_format_points(capped_points)} based on audit coverage ratio {_format_points(coverage_ratio * 100)}%"
+    )
+    feedback = _append_auto_correction(
+        feedback,
+        "[Auto-corrected: score aligned to audit coverage.]",
+    )
+    return capped_points, feedback
+
+
+def _append_auto_correction(feedback: str, note: str) -> str:
+    cleaned = feedback.strip()
+    return f"{cleaned} {note}".strip() if cleaned else note
+
+
+def soften_generic_partial_audit_items(
+    audit_items: list[RequirementAuditItem],
+) -> list[RequirementAuditItem]:
+    softened: list[RequirementAuditItem] = []
+    for item in audit_items:
+        if _is_generic_improvement_partial(item):
+            softened.append(
+                RequirementAuditItem(
+                    requirement=item.requirement,
+                    status="met",
+                    evidence=item.evidence,
+                    missing_or_weak_reason="",
+                )
+            )
+        else:
+            softened.append(item)
+    return softened
+
+
 def audit_consistency_errors(
     *,
     criterion_name: str,
@@ -121,11 +396,7 @@ def audit_consistency_errors(
         errors.append(
             f"{criterion_name}: full score conflicts with partial or missing audit items"
         )
-    if score_ratio >= 0.85 and has_missing:
-        errors.append(
-            f"{criterion_name}: high score conflicts with missing required audit items"
-        )
-    if score_ratio >= 0.70 and not has_met:
+    if score_ratio >= 0.70 and has_missing and not has_met:
         errors.append(
             f"{criterion_name}: high score has no audit item marked as met"
         )
@@ -232,6 +503,31 @@ def cap_score_by_explicit_evidence(
     return capped_score, note
 
 
+def should_apply_explicit_evidence_cap(audit_items: list[RequirementAuditItem]) -> bool:
+    if not audit_items:
+        return True
+    return any(item.status in {"partial", "missing", "unknown"} for item in audit_items)
+
+
+def align_score_with_fully_met_audit(
+    *,
+    audit_items: list[RequirementAuditItem],
+    normalized_score: float | None,
+    grade_scale: float,
+    is_manual: bool,
+) -> tuple[float | None, bool]:
+    if is_manual or normalized_score is None or not audit_items or grade_scale <= 0:
+        return normalized_score, False
+
+    all_items_met_with_evidence = all(
+        item.status == "met" and item.evidence.strip() for item in audit_items
+    )
+    if not all_items_met_with_evidence or normalized_score >= grade_scale:
+        return normalized_score, False
+
+    return float(grade_scale), True
+
+
 def cap_score_by_audit_consistency(
     *,
     criterion_name: str,
@@ -250,10 +546,8 @@ def cap_score_by_audit_consistency(
     score_ratio = normalized_score / grade_scale
     cap_ratio: float | None = None
 
-    if score_ratio >= 0.70 and not has_met:
+    if score_ratio >= 0.70 and has_missing and not has_met:
         cap_ratio = 0.55
-    elif score_ratio >= 0.85 and has_missing:
-        cap_ratio = 0.69
     elif normalized_score >= grade_scale and (has_missing or has_partial):
         cap_ratio = 0.84
 
@@ -450,6 +744,155 @@ def _normalize_status(value: Any) -> str:
 def _contains_absence_language(text: str) -> bool:
     normalized = f" {_normalize_for_search(text)} "
     return any(pattern in normalized for pattern in _ABSENCE_PATTERNS)
+
+
+def _is_generic_improvement_partial(item: RequirementAuditItem) -> bool:
+    if item.status != "partial" or not item.evidence.strip():
+        return False
+    if _contains_absence_language(item.evidence):
+        return False
+
+    reason = item.missing_or_weak_reason.strip()
+    if not reason:
+        return False
+
+    reason_normalized = _normalize_for_search(reason)
+    has_generic_improvement = any(
+        _normalize_for_search(pattern) in reason_normalized
+        for pattern in _GENERIC_IMPROVEMENT_PATTERNS
+    )
+    has_concrete_deficiency = any(
+        _normalize_for_search(pattern) in reason_normalized
+        for pattern in _CONCRETE_DEFICIENCY_PATTERNS
+    )
+    return has_generic_improvement and not has_concrete_deficiency
+
+
+def _is_generic_improvement_only(text: str) -> bool:
+    normalized = _normalize_for_search(text)
+    if not normalized:
+        return False
+
+    generic_patterns = (
+        *_GENERIC_IMPROVEMENT_PATTERNS,
+        "could be clearer",
+        "needs more detail",
+        "lacks depth",
+        "\u064a\u0645\u0643\u0646 \u062a\u062d\u0633\u064a\u0646\u0647",
+        "\u064a\u0645\u0643\u0646 \u062a\u062d\u0633\u064a\u0646\u0647\u0627",
+        "\u0646\u0642\u0627\u0637 \u064a\u0645\u0643\u0646 \u062a\u062d\u0633\u064a\u0646\u0647\u0627",
+        "\u064a\u062d\u062a\u0627\u062c \u062a\u0641\u0627\u0635\u064a\u0644 \u0623\u0643\u062b\u0631",
+        "\u064a\u0645\u0643\u0646 \u0623\u0646 \u064a\u0643\u0648\u0646 \u0623\u0639\u0645\u0642",
+    )
+    has_generic_improvement = any(
+        _normalize_for_search(pattern) in normalized
+        for pattern in generic_patterns
+    )
+    if not has_generic_improvement:
+        return False
+
+    specific_patterns = (
+        r"\d",
+        r"\bmissing\b",
+        r"\bnot found\b",
+        r"\brequired\b",
+        r"\bonly\s+\d+\b",
+        "\u0646\u0627\u0642\u0635",
+        "\u0644\u0645 \u064a\u0630\u0643\u0631",
+        "\u0637\u064f\u0644\u0628",
+        "\u0641\u0642\u0637\\s+\\d+",
+    )
+    return not any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in specific_patterns)
+
+
+def _has_specific_unmet_audit_item(
+    audit_items: list[RequirementAuditItem],
+    criterion_text: str,
+) -> bool:
+    for item in audit_items:
+        if item.status not in {"partial", "missing", "unknown"}:
+            continue
+        if item.status == "missing":
+            return True
+        reason = item.missing_or_weak_reason.strip()
+        if not reason:
+            continue
+        if _is_generic_improvement_only(reason):
+            continue
+        if _contains_concrete_deficiency_text(reason):
+            return True
+        if re.search(r"\d", reason):
+            return True
+        reason_normalized = _normalize_for_search(reason)
+        for term in extract_explicit_requirement_terms(criterion_text):
+            term_normalized = _normalize_for_search(term)
+            if term_normalized and term_normalized in reason_normalized:
+                return True
+    return False
+
+
+def _contains_concrete_deficiency_text(text: str) -> bool:
+    normalized = _normalize_for_search(text)
+    if not normalized:
+        return False
+    if re.search(r"\d", text):
+        return True
+    return any(
+        _normalize_for_search(pattern) in normalized
+        for pattern in _CONCRETE_DEFICIENCY_PATTERNS
+    )
+
+
+def _is_softenable_generic_partial(item: RequirementAuditItem, criterion_text: str) -> bool:
+    if item.status != "partial":
+        return False
+
+    evidence = item.evidence.strip()
+    if not evidence or evidence.casefold() == "not found":
+        return False
+    if _contains_absence_language(evidence):
+        return False
+
+    reason = item.missing_or_weak_reason.strip()
+    if not reason:
+        return False
+
+    reason_normalized = _normalize_for_search(reason)
+    generic_patterns = (
+        "could be improved",
+        "needs more detail",
+        "could be clearer",
+        "lacks depth",
+        "\u064a\u0645\u0643\u0646 \u062a\u062d\u0633\u064a\u0646\u0647",
+        "\u064a\u062d\u062a\u0627\u062c \u062a\u0641\u0627\u0635\u064a\u0644 \u0623\u0643\u062b\u0631",
+        "\u064a\u0645\u0643\u0646 \u0623\u0646 \u064a\u0643\u0648\u0646 \u0623\u0639\u0645\u0642",
+    )
+    if not any(_normalize_for_search(pattern) in reason_normalized for pattern in generic_patterns):
+        return False
+
+    if re.search(r"\d", reason):
+        return False
+
+    specific_patterns = (
+        r"\bmissing\b",
+        r"\bnot found\b",
+        r"\brequired\b",
+        r"\bonly\s+\d+\b",
+        "\u0646\u0627\u0642\u0635",
+        "\u0644\u0645 \u064a\u0630\u0643\u0631",
+        "\u0637\u064f\u0644\u0628",
+        "\u0641\u0642\u0637\\s+\\d+",
+    )
+    for pattern in specific_patterns:
+        if re.search(pattern, reason_normalized, flags=re.IGNORECASE):
+            return False
+
+    for term in extract_explicit_requirement_terms(criterion_text):
+        term_normalized = _normalize_for_search(term)
+        if term_normalized and term_normalized in reason_normalized:
+            return False
+
+    return True
 
 
 def _looks_like_title_or_metadata(window: str) -> bool:

@@ -11,7 +11,7 @@ import { Badge } from "@/components/shared/badge";
 import { Button } from "@/components/shared/button";
 import { Card } from "@/components/shared/card";
 import { Input } from "@/components/shared/input";
-import { getUserFacingErrorMessage, getUserFacingReason } from "@/lib/error-messages";
+import { getUserFacingErrorMessage } from "@/lib/error-messages";
 import { Select } from "@/components/shared/select";
 import {
   createProvider,
@@ -62,6 +62,7 @@ const providerDefaults: Record<
   FormValues["provider_name"],
   {
     model: string;
+    maxTokens?: number;
     hintKey: string;
     requiresApiKey: boolean;
     apiKeyHelpKey: string;
@@ -70,6 +71,7 @@ const providerDefaults: Record<
 > = {
   openai: {
     model: "gpt-4o-mini",
+    maxTokens: undefined,
     hintKey: "providers.modelHintOpenAI",
     requiresApiKey: true,
     apiKeyHelpKey: "providers.apiKeyHelpOpenAI",
@@ -77,6 +79,7 @@ const providerDefaults: Record<
   },
   gemini: {
     model: "gemini-2.0-flash",
+    maxTokens: undefined,
     hintKey: "providers.modelHintGemini",
     requiresApiKey: true,
     apiKeyHelpKey: "providers.apiKeyHelpGemini",
@@ -84,20 +87,23 @@ const providerDefaults: Record<
   },
   deepseek: {
     model: "deepseek-chat",
+    maxTokens: undefined,
     hintKey: "providers.modelHintDeepSeek",
     requiresApiKey: true,
     apiKeyHelpKey: "providers.apiKeyHelpDeepSeek",
     apiKeyHelpUrl: "https://platform.deepseek.com/api_keys",
   },
   groq: {
-    model: "llama-3.1-8b-instant",
+    model: "llama-3.3-70b-versatile",
+    maxTokens: undefined,
     hintKey: "providers.modelHintGroq",
     requiresApiKey: true,
     apiKeyHelpKey: "providers.apiKeyHelpGroq",
     apiKeyHelpUrl: "https://console.groq.com/keys",
   },
   ollama: {
-    model: "deepseek-r1:8b",
+    model: "llama3.2",
+    maxTokens: undefined,
     hintKey: "providers.modelHintOllama",
     requiresApiKey: false,
     apiKeyHelpKey: "providers.apiKeyNotRequired",
@@ -119,6 +125,7 @@ export function ProviderSettingsPage() {
       model_name: "gpt-4o-mini",
       is_active: true,
       is_default: true,
+      max_tokens_per_request: undefined,
     },
   });
   const providerName = form.watch("provider_name");
@@ -144,6 +151,14 @@ export function ProviderSettingsPage() {
         shouldDirty: true,
         shouldValidate: true,
       });
+      form.setValue(
+        "max_tokens_per_request",
+        providerDefaults[providerName].maxTokens,
+        {
+          shouldDirty: true,
+          shouldValidate: true,
+        },
+      );
     }
     if (!providerDefaults[providerName].requiresApiKey) {
       form.setValue("api_key", "", { shouldDirty: true, shouldValidate: true });
@@ -180,7 +195,7 @@ export function ProviderSettingsPage() {
         toast.success(response.message);
         return;
       }
-      toast.error(getUserFacingReason(response.message, "errors.provider.connectionFailed"));
+      toast.error(response.message || t("errors.provider.connectionFailed"));
     },
     onError: (error: Error) => toast.error(getUserFacingErrorMessage(error)),
   });

@@ -1,6 +1,11 @@
 ﻿export type ThemeMode = "light" | "dark" | "system";
 export type LanguageCode = "en" | "ar";
-export type ProviderName = "openai" | "gemini" | "deepseek" | "ollama" | "groq";
+export type ProviderName =
+  | "openai"
+  | "gemini"
+  | "deepseek"
+  | "ollama"
+  | "groq";
 
 export interface InstructorProfile {
   id: string;
@@ -56,6 +61,7 @@ export interface AssignmentGroup {
   name: string;
   description: string | null;
   grade_scale: number;
+  enable_auto_score_adjustment: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

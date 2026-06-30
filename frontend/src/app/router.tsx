@@ -1,18 +1,76 @@
-﻿import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
+import { lazy, Suspense, type ReactNode } from "react";
+import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
 
-import { AppShell } from "@/components/layout/app-shell";
 import { useAuthStore } from "@/app/store/use-auth-store";
-import { DashboardPage } from "@/modules/dashboard/pages/dashboard-page";
-import { LoginPage } from "@/modules/auth/pages/login-page";
-import { RegisterPage } from "@/modules/auth/pages/register-page";
-import { GroupsPage } from "@/modules/groups/pages/groups-page";
-import { GroupDetailPage } from "@/modules/groups/pages/group-detail-page";
-import { SubmissionPage } from "@/modules/submissions/pages/submissions-page";
-import { ProviderSettingsPage } from "@/modules/providers/pages/provider-settings-page";
-import { SettingsPage } from "@/modules/settings/pages/settings-page";
-import { SubmissionEvaluationsPage } from "@/modules/evaluations/pages/submission-evaluations-page";
-import { EvaluationDetailPage } from "@/modules/evaluations/pages/evaluation-detail-page";
-import { AllEvaluationsPage } from "@/modules/evaluations/pages/all-evaluations-page";
+import { AppShell } from "@/components/layout/app-shell";
+
+const DashboardPage = lazy(() =>
+  import("@/modules/dashboard/pages/dashboard-page").then((module) => ({
+    default: module.DashboardPage,
+  })),
+);
+const LoginPage = lazy(() =>
+  import("@/modules/auth/pages/login-page").then((module) => ({
+    default: module.LoginPage,
+  })),
+);
+const RegisterPage = lazy(() =>
+  import("@/modules/auth/pages/register-page").then((module) => ({
+    default: module.RegisterPage,
+  })),
+);
+const GroupsPage = lazy(() =>
+  import("@/modules/groups/pages/groups-page").then((module) => ({
+    default: module.GroupsPage,
+  })),
+);
+const GroupDetailPage = lazy(() =>
+  import("@/modules/groups/pages/group-detail-page").then((module) => ({
+    default: module.GroupDetailPage,
+  })),
+);
+const SubmissionPage = lazy(() =>
+  import("@/modules/submissions/pages/submissions-page").then((module) => ({
+    default: module.SubmissionPage,
+  })),
+);
+const ProviderSettingsPage = lazy(() =>
+  import("@/modules/providers/pages/provider-settings-page").then((module) => ({
+    default: module.ProviderSettingsPage,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import("@/modules/settings/pages/settings-page").then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
+const SubmissionEvaluationsPage = lazy(() =>
+  import("@/modules/evaluations/pages/submission-evaluations-page").then(
+    (module) => ({ default: module.SubmissionEvaluationsPage }),
+  ),
+);
+const EvaluationDetailPage = lazy(() =>
+  import("@/modules/evaluations/pages/evaluation-detail-page").then(
+    (module) => ({ default: module.EvaluationDetailPage }),
+  ),
+);
+const AllEvaluationsPage = lazy(() =>
+  import("@/modules/evaluations/pages/all-evaluations-page").then((module) => ({
+    default: module.AllEvaluationsPage,
+  })),
+);
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-48 items-center justify-center text-sm text-foreground/60">
+      Loading...
+    </div>
+  );
+}
+
+function LazyPage({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<PageFallback />}>{children}</Suspense>;
+}
 
 function AuthOnlyLayout() {
   const token = useAuthStore((state) => state.accessToken);
@@ -34,23 +92,100 @@ export const router = createBrowserRouter([
   {
     element: <AuthOnlyLayout />,
     children: [
-      { path: "/login", element: <LoginPage /> },
-      { path: "/register", element: <RegisterPage /> },
+      {
+        path: "/login",
+        element: (
+          <LazyPage>
+            <LoginPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "/register",
+        element: (
+          <LazyPage>
+            <RegisterPage />
+          </LazyPage>
+        ),
+      },
     ],
   },
   {
     path: "/",
     element: <ProtectedLayout />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: "groups", element: <GroupsPage /> },
-      { path: "groups/:groupId", element: <GroupDetailPage /> },
-      { path: "submissions", element: <SubmissionPage /> },
-      { path: "evaluations", element: <AllEvaluationsPage /> },
-      { path: "submissions/:submissionId/evaluations", element: <SubmissionEvaluationsPage /> },
-      { path: "evaluations/:evaluationId", element: <EvaluationDetailPage /> },
-      { path: "providers", element: <ProviderSettingsPage /> },
-      { path: "settings", element: <SettingsPage /> },
+      {
+        index: true,
+        element: (
+          <LazyPage>
+            <DashboardPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "groups",
+        element: (
+          <LazyPage>
+            <GroupsPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "groups/:groupId",
+        element: (
+          <LazyPage>
+            <GroupDetailPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "submissions",
+        element: (
+          <LazyPage>
+            <SubmissionPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "evaluations",
+        element: (
+          <LazyPage>
+            <AllEvaluationsPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "submissions/:submissionId/evaluations",
+        element: (
+          <LazyPage>
+            <SubmissionEvaluationsPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "evaluations/:evaluationId",
+        element: (
+          <LazyPage>
+            <EvaluationDetailPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "providers",
+        element: (
+          <LazyPage>
+            <ProviderSettingsPage />
+          </LazyPage>
+        ),
+      },
+      {
+        path: "settings",
+        element: (
+          <LazyPage>
+            <SettingsPage />
+          </LazyPage>
+        ),
+      },
     ],
   },
 ]);

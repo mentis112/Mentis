@@ -9,6 +9,7 @@ class AssignmentGroupCreate(BaseModel):
     name: str = Field(min_length=2, max_length=255)
     description: str | None = Field(default=None, max_length=4000)
     grade_scale: int = Field(ge=1, le=1000)
+    enable_auto_score_adjustment: bool = True
     is_active: bool = True
 
 
@@ -16,6 +17,7 @@ class AssignmentGroupUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=255)
     description: str | None = Field(default=None, max_length=4000)
     grade_scale: int | None = Field(default=None, ge=1, le=1000)
+    enable_auto_score_adjustment: bool | None = None
     is_active: bool | None = None
 
 
@@ -53,6 +55,7 @@ class AssignmentGroupResponse(ORMModel):
     name: str
     description: str | None
     grade_scale: int
+    enable_auto_score_adjustment: bool
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -63,4 +66,3 @@ class AssignmentGroupDetailResponse(AssignmentGroupResponse):
     submissions_count: int = 0
     weights_total: float = 0
     ready_for_evaluation: bool = False
-

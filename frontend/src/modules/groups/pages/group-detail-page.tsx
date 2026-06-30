@@ -88,6 +88,11 @@ export function GroupDetailPage() {
                 >
                   {isReady ? t("state.completed") : t("state.pending")}
                 </Badge>
+                <Badge>
+                  {group.enable_auto_score_adjustment
+                    ? t("groups.autoScoreAdjustmentOn")
+                    : t("groups.autoScoreAdjustmentOff")}
+                </Badge>
                 <h2 className="break-words text-3xl font-bold tracking-tight">{group.name}</h2>
               </div>
               <p className="max-w-3xl text-sm text-foreground/60">{t("groups.detailsReadOnlyHint")}</p>

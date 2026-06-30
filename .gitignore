@@ -52,6 +52,13 @@ pnpm-debug.log*
 *.log
 *.pid
 
+# Local demo/support material kept out of GitHub by default.
+test-data/
+docs/*task*.md
+docs/*q-and-a*.md
+docs/evaluation-workflow.md
+backend/app/adapters/ai/openrouter_provider.py
+
 # Uploaded files are runtime data. Keep the folder, not user submissions.
 uploads/*
 !uploads/.gitkeep

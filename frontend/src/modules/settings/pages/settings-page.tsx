@@ -83,7 +83,7 @@ export function SettingsPage() {
         toast.error(
           t(
             "settings.avatarSizeError",
-            "حجم الصورة يجب أن لا يتجاوز 5 ميجابايت",
+            "Profile picture must be 5 MB or smaller",
           ),
         );
         return;
@@ -93,7 +93,7 @@ export function SettingsPage() {
       reader.onloadend = () => {
         setAvatar(reader.result as string);
         toast.success(
-          t("settings.avatarUpdated", "تم تحديث الصورة الشخصية بنجاح"),
+          t("settings.avatarUpdated", "Profile picture updated successfully"),
         );
       };
       reader.readAsDataURL(file);
@@ -171,12 +171,12 @@ export function SettingsPage() {
               </div>
               <div>
                 <h4 className="font-semibold text-sm mb-1">
-                  {t("settings.accountVerified", "حساب موثق وآمن")}
+                  {t("settings.accountVerified", "Verified and secure account")}
                 </h4>
                 <p className="text-xs text-foreground/70 leading-relaxed font-medium">
                   {t(
                     "settings.accountVerifiedDesc",
-                    "يتمتع هذا الحساب بصلاحيات الإشراف الكاملة وهو محمي بأحدث معايير الأمان والتشفير للتأكد من حماية بياناتك.",
+                    "This account has full instructor permissions and is protected with modern security and encryption standards to keep your data safe.",
                   )}
                 </p>
               </div>
